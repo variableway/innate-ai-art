@@ -1,0 +1,6 @@
+[submodule "projects/voicebox"]
+	path = projects/voicebox
+	url = https://github.com/jamiepine/voicebox.git
+[submodule "projects/auto-music-studio"]
+	path = projects/auto-music-studio
+	url = https://github.com/frankbria/auto-music-studio.git

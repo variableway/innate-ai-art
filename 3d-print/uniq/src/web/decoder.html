@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uniq 解码器 — 3D 物理解密体验</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: -apple-system, 'SF Pro', 'PingFang SC', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px;
+            overflow-x: hidden;
+        }
+
+        .phase { display: none; width: 100%; max-width: 420px; animation: fadeIn 0.6s ease; }
+        .phase.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        h2 { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+        .subtitle { font-size: 0.85rem; color: #888; margin-bottom: 24px; line-height: 1.5; }
+
+        /* Phase 1: NFC Tap */
+        .nfc-ring {
+            width: 120px; height: 120px; border-radius: 50%;
+            border: 3px solid #333; margin: 40px auto;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; animation: pulse 2s infinite;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .nfc-ring:hover { border-color: #6366f1; background: rgba(99,102,241,0.05); }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } }
+        .nfc-status { text-align: center; font-size: 0.9rem; color: #888; margin-top: 12px; }
+
+        /* Phase 2: Photo Capture */
+        .camera-frame {
+            width: 100%; aspect-ratio: 4/3; border-radius: 16px;
+            background: #1a1a1a; border: 2px dashed #333;
+            display: flex; align-items: center; justify-content: center;
+            margin: 16px 0; overflow: hidden; position: relative;
+        }
+        .camera-frame img, .camera-frame video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .camera-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        .scan-line {
+            width: 80%; height: 2px; background: #6366f1;
+            animation: scanMove 2s infinite; opacity: 0.8;
+        }
+        @keyframes scanMove { 0% { transform: translateY(-60px); } 100% { transform: translateY(60px); } }
+
+        .btn {
+            padding: 14px 32px; border-radius: 12px; border: none;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; width: 100%; margin-top: 16px;
+        }
+        .btn-primary { background: #6366f1; color: white; }
+        .btn-primary:hover { background: #5558e6; }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-secondary { background: #222; color: #aaa; border: 1px solid #333; }
+        .btn-secondary:hover { background: #2a2a2a; color: #ddd; }
+
+        /* Phase 3: OKLCH Color Match */
+        .color-display {
+            width: 100px; height: 100px; border-radius: 50%;
+            margin: 16px auto; border: 3px solid rgba(255,255,255,0.2);
+            transition: background-color 0.15s ease;
+        }
+        .slider-group { margin: 20px 0; }
+        .slider-label { display: flex; justify-content: space-between; font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+        input[type=range] {
+            width: 100%; height: 8px; border-radius: 4px;
+            -webkit-appearance: none; appearance: none;
+            background: linear-gradient(to right,
+                oklch(85% 0.16 0), oklch(85% 0.16 60), oklch(85% 0.16 120),
+                oklch(85% 0.16 180), oklch(85% 0.16 240), oklch(85% 0.16 300), oklch(85% 0.16 360)
+            );
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 28px; height: 28px;
+            background: white; border-radius: 50%; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+        .match-indicator {
+            text-align: center; font-size: 0.8rem; margin-top: 8px;
+            height: 20px; transition: color 0.3s;
+        }
+
+        /* Phase 4: Unlock */
+        .unlock-container { text-align: center; }
+        .unlock-icon { font-size: 4rem; margin: 30px 0; }
+        .secret-text {
+            background: #1a1a2e; border: 1px solid #333;
+            border-radius: 16px; padding: 24px; margin: 20px 0;
+            font-size: 1.1rem; line-height: 1.8; color: #c4b5fd;
+            font-style: italic;
+        }
+        .hash-badge {
+            display: inline-block; padding: 6px 14px;
+            background: #1a1a2e; border-radius: 8px;
+            font-family: monospace; font-size: 0.75rem;
+            color: #6366f1; margin-top: 12px;
+        }
+        .progress-dots { display: flex; justify-content: center; gap: 12px; margin: 24px 0; }
+        .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #333; transition: all 0.3s;
+        }
+        .dot.done { background: #6366f1; }
+        .dot.current { background: #6366f1; box-shadow: 0 0 10px #6366f1; }
+
+        .oklch-info {
+            background: #1a1a2e; border-radius: 12px; padding: 16px;
+            margin-top: 16px; font-size: 0.8rem; color: #666; line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Progress indicator -->
+<div class="progress-dots" id="progress">
+    <div class="dot current" id="dot1"></div>
+    <div class="dot" id="dot2"></div>
+    <div class="dot" id="dot3"></div>
+    <div class="dot" id="dot4"></div>
+</div>
+
+<!-- Phase 1: NFC Tap -->
+<div class="phase active" id="phase1">
+    <h2>Step 1: 感应你的 Uniq 物件</h2>
+    <p class="subtitle">将手机靠近 3D 打印物内嵌的 NFC 芯片，读取物理身份。</p>
+    <div class="nfc-ring" id="nfcBtn">📱</div>
+    <p class="nfc-status" id="nfcStatus">点击上方图标模拟 NFC 感应</p>
+    <button class="btn btn-secondary" onclick="simulateNFC()">模拟 NFC 感应（演示模式）</button>
+</div>
+
+<!-- Phase 2: Photo Capture -->
+<div class="phase" id="phase2">
+    <h2>Step 2: 拍摄表面纹理</h2>
+    <p class="subtitle">对准打印物表面，拍摄独一无二的纹理图案。</p>
+    <div class="camera-frame" id="cameraFrame">
+        <div class="camera-overlay" id="cameraOverlay">
+            <div class="scan-line"></div>
+            <span style="margin-top: 30px; color: #666; font-size: 0.85rem">对准表面纹理</span>
+        </div>
+    </div>
+    <button class="btn btn-primary" id="captureBtn" onclick="simulateCapture()">模拟拍照验证</button>
+</div>
+
+<!-- Phase 3: OKLCH Color Match -->
+<div class="phase" id="phase3">
+    <h2>Step 3: 找到记忆中的颜色</h2>
+    <p class="subtitle">调节滑块，找到打印物上那抹"属于你的颜色"。</p>
+
+    <div class="slider-group">
+        <div class="slider-label"><span>色相 (Hue)</span><span id="hVal">180°</span></div>
+        <input type="range" id="hSlider" min="0" max="360" value="180">
+    </div>
+
+    <div class="color-display" id="colorCircle"></div>
+    <div class="match-indicator" id="matchHint"></div>
+
+    <div class="slider-group">
+        <div class="slider-label"><span>亮度 (Lightness)</span><span id="lVal">70%</span></div>
+        <input type="range" id="lSlider" min="30" max="100" value="70">
+    </div>
+
+    <div class="slider-group">
+        <div class="slider-label"><span>饱和度 (Chroma)</span><span id="cVal">0.12</span></div>
+        <input type="range" id="cSlider" min="0" max="30" value="12">
+    </div>
+
+    <button class="btn btn-primary" id="unlockBtn" disabled onclick="doUnlock()">确认并解密</button>
+
+    <div class="oklch-info">
+        提示：观察你手边 3D 打印物的颜色，试着在滑块上复现它。<br>
+        OKLCH 色彩空间让每个角度的感知都是一致的。
+    </div>
+</div>
+
+<!-- Phase 4: Unlock -->
+<div class="phase" id="phase4">
+    <div class="unlock-container">
+        <div class="unlock-icon">🔓</div>
+        <h2>解锁成功</h2>
+        <div class="secret-text" id="secretText">
+            加载中...
+        </div>
+        <div class="hash-badge" id="hashBadge">uniq:00000000</div>
+        <div style="margin-top: 24px;">
+            <button class="btn btn-secondary" onclick="resetAll()">重新体验</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// === Configuration (in production, these come from server) ===
+const CONFIG = {
+    // Target OKLCH values (the "password")
+    targetH: 85,    // Yellow hue
+    targetL: 85,    // High lightness
+    targetC: 12,    // Moderate chroma
+    // Tolerance
+    hTolerance: 8,
+    lTolerance: 15,
+    cTolerance: 5,
+    // Secret message (in production, encrypted with AES)
+    secretMessage: '"在这个红黄白的世界里，你是我唯一的色彩。"\n\n—— 2024.05.20\n\n这件 3D 打印物的每一层纹理、每一处颜色过渡，都是独一无二的。就像你一样。',
+    // Hash fingerprint
+    hashPrefix: '2bd80fdf',
+};
+
+// === State ===
+let nfcRead = false;
+let photoVerified = false;
+let colorMatched = false;
+
+// === NFC Simulation ===
+function simulateNFC() {
+    nfcRead = true;
+    document.getElementById('nfcStatus').textContent = 'NFC 读取成功！UID: uniq:' + CONFIG.hashPrefix + '...';
+    document.getElementById('nfcBtn').style.borderColor = '#22c55e';
+    document.getElementById('nfcBtn').style.animation = 'none';
+    document.getElementById('nfcBtn').textContent = '✓';
+
+    setTimeout(() => goToPhase(2), 1200);
+}
+
+// === Photo Capture Simulation ===
+function simulateCapture() {
+    const frame = document.getElementById('cameraFrame');
+    const overlay = document.getElementById('cameraOverlay');
+    overlay.innerHTML = '<span style="color: #6366f1; font-size: 0.9rem">正在分析纹理特征...</span>';
+
+    setTimeout(() => {
+        photoVerified = true;
+        overlay.innerHTML = '<span style="color: #22c55e; font-size: 0.9rem">纹理验证通过 ✓<br><small style="color: #666">检测到 47 个特征点匹配</small></span>';
+
+        setTimeout(() => goToPhase(3), 1500);
+    }, 2000);
+}
+
+// === OKLCH Color Matching ===
+const hSlider = document.getElementById('hSlider');
+const lSlider = document.getElementById('lSlider');
+const cSlider = document.getElementById('cSlider');
+
+function updateColor() {
+    const h = parseInt(hSlider.value);
+    const l = parseInt(lSlider.value);
+    const c = parseInt(cSlider.value) / 100;
+
+    document.getElementById('hVal').textContent = h + '°';
+    document.getElementById('lVal').textContent = l + '%';
+    document.getElementById('cVal').textContent = c.toFixed(2);
+
+    const color = `oklch(${l}% ${c} ${h})`;
+    document.getElementById('colorCircle').style.backgroundColor = color;
+
+    // Check match
+    const hMatch = Math.abs(h - CONFIG.targetH) <= CONFIG.hTolerance;
+    const lMatch = Math.abs(l - CONFIG.targetL) <= CONFIG.lTolerance;
+    const cMatch = Math.abs(c * 100 - CONFIG.targetC) <= CONFIG.cTolerance;
+
+    const hint = document.getElementById('matchHint');
+    const btn = document.getElementById('unlockBtn');
+
+    if (hMatch && lMatch && cMatch) {
+        colorMatched = true;
+        hint.textContent = '颜色匹配！可以解密了';
+        hint.style.color = '#22c55e';
+        btn.disabled = false;
+    } else {
+        colorMatched = false;
+        hint.textContent = hMatch ? '色相接近...' : '继续调整...';
+        hint.style.color = '#888';
+        btn.disabled = true;
+    }
+}
+
+hSlider.addEventListener('input', updateColor);
+lSlider.addEventListener('input', updateColor);
+cSlider.addEventListener('input', updateColor);
+
+// Initialize color display
+updateColor();
+
+// === Unlock ===
+function doUnlock() {
+    document.getElementById('secretText').textContent = CONFIG.secretMessage;
+    document.getElementById('hashBadge').textContent = 'uniq:' + CONFIG.hashPrefix + '13af3a4d';
+    goToPhase(4);
+}
+
+// === Navigation ===
+function goToPhase(n) {
+    document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+    document.getElementById('phase' + n).classList.add('active');
+
+    document.querySelectorAll('.dot').forEach((d, i) => {
+        d.className = 'dot';
+        if (i + 1 < n) d.classList.add('done');
+        if (i + 1 === n) d.classList.add('current');
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetAll() {
+    nfcRead = false;
+    photoVerified = false;
+    colorMatched = false;
+    hSlider.value = 180;
+    lSlider.value = 70;
+    cSlider.value = 12;
+    updateColor();
+    document.getElementById('nfcStatus').textContent = '点击上方图标模拟 NFC 感应';
+    document.getElementById('nfcBtn').textContent = '📱';
+    document.getElementById('nfcBtn').style.borderColor = '#333';
+    document.getElementById('nfcBtn').style.animation = 'pulse 2s infinite';
+    goToPhase(1);
+}
+</script>
+</body>
+</html>
